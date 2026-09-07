@@ -6,61 +6,46 @@
   <title>Room Model</title>
   <style>
     :root {
-      --panel-bg: #1e1f24;
-      --panel-fg: #e6e6e6;
-      --muted: #9aa0a6;
-      --accent: #4c8bf5;
-      --border: #33353c;
+      --panel-bg: #1e1f24; --panel-fg: #e6e6e6; --muted: #9aa0a6;
+      --accent: #4c8bf5; --border: #33353c; --ok: #6fcf97; --bad: #f2994a;
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; height: 100%; font-family: system-ui, -apple-system, Segoe UI, sans-serif; background: #0f1013; color: var(--panel-fg); }
     #app { display: flex; height: 100%; }
     #panel {
-      width: 280px; flex: 0 0 280px; padding: 16px; overflow-y: auto;
+      width: 300px; flex: 0 0 300px; padding: 16px; overflow-y: auto;
       background: var(--panel-bg); border-right: 1px solid var(--border);
     }
-    #panel h1 { font-size: 16px; margin: 0 0 4px; }
-    #panel p.hint { font-size: 12px; color: var(--muted); margin: 0 0 16px; line-height: 1.4; }
-    #panel h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 18px 0 8px; }
-    label { display: grid; grid-template-columns: 1fr 80px; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 8px; }
-    input[type=number] {
-      width: 100%; padding: 4px 6px; background: #121317; color: var(--panel-fg);
-      border: 1px solid var(--border); border-radius: 4px; font-size: 13px;
-    }
-    ul#legend { list-style: none; padding: 0; margin: 0; font-size: 13px; }
-    ul#legend li { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
-    ul#legend .swatch { width: 14px; height: 14px; border-radius: 3px; flex: 0 0 14px; }
-    ul#legend .dims { color: var(--muted); margin-left: auto; font-size: 12px; }
+    #panel h1 { font-size: 16px; margin: 0 0 2px; }
+    #panel .dims { font-size: 13px; color: var(--muted); margin: 0 0 4px; }
+    #panel p.hint { font-size: 12px; color: var(--muted); margin: 0 0 14px; line-height: 1.4; }
+    #panel h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 16px 0 6px; }
+    label.row { display: grid; grid-template-columns: 1fr 80px; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 6px; }
+    input[type=number] { width: 100%; padding: 4px 6px; background: #121317; color: var(--panel-fg); border: 1px solid var(--border); border-radius: 4px; font-size: 13px; }
+    .buttons { display: flex; gap: 6px; flex-wrap: wrap; }
+    button { padding: 5px 10px; background: #2a2c34; color: var(--panel-fg); border: 1px solid var(--border); border-radius: 4px; font-size: 12px; cursor: pointer; }
+    button:hover { border-color: var(--accent); }
+    label.check { display: flex; align-items: center; gap: 6px; font-size: 13px; margin-top: 8px; }
+    ul.legend { list-style: none; padding: 0; margin: 0; font-size: 13px; }
+    ul.legend li { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+    ul.legend .swatch { width: 12px; height: 12px; border-radius: 3px; flex: 0 0 12px; }
+    ul.legend .meta { color: var(--muted); margin-left: auto; font-size: 12px; text-align: right; white-space: nowrap; }
+    #issues { font-size: 12px; line-height: 1.4; }
+    #issues.ok { color: var(--ok); }
+    #issues.bad { color: var(--bad); }
+    #issues li { margin-bottom: 4px; }
     #stats { font-size: 12px; color: var(--muted); margin-top: 12px; }
-    #view { flex: 1; position: relative; }
-    canvas { display: block; }
+    #view { flex: 1; min-width: 0; position: relative; overflow: hidden; }
+    #view canvas { display: block; width: 100%; height: 100%; }
     @media (max-width: 700px) {
       #app { flex-direction: column; }
       #panel { width: auto; flex: 0 0 auto; max-height: 45%; border-right: 0; border-bottom: 1px solid var(--border); }
     }
   </style>
 
-  <!-- ============================================================
-       ROOM CONFIG — edit this block to describe your room.
-       All measurements are in FEET.
-       Coordinate system: x runs along the room's width (left → right),
-       z runs along its length (back wall → front), y is up.
-       (0, 0) is the back-left corner of the floor.
-       ============================================================ -->
-  <script>
-    window.ROOM_CONFIG = {
-      room: { width: 12, length: 14, height: 9 },
-      furniture: [
-        // name, x/z = position of the piece's back-left corner on the floor
-        // w = size along x, d = size along z, h = height
-        { name: "Bed (queen)",  x: 3.5, z: 0.25, w: 5,   d: 6.7, h: 2,   color: "#7f8cff" },
-        { name: "Nightstand",   x: 1.5, z: 0.25, w: 1.7, d: 1.5, h: 2,   color: "#c9a26b" },
-        { name: "Nightstand",   x: 8.8, z: 0.25, w: 1.7, d: 1.5, h: 2,   color: "#c9a26b" },
-        { name: "Dresser",      x: 0.25, z: 8,   w: 1.6, d: 5,   h: 2.8, color: "#a3775b" },
-        { name: "Desk",         x: 8,   z: 11.5, w: 3.8, d: 2,   h: 2.5, color: "#6bb3a0" },
-      ],
-    };
-  </script>
+  <!-- Room description + geometry helpers (plain scripts so file:// works). -->
+  <script src="room.config.js"></script>
+  <script src="src/geometry.js"></script>
 
   <script type="importmap">
     {
@@ -74,17 +59,33 @@
 <body>
   <div id="app">
     <aside id="panel">
-      <h1>Room Model</h1>
-      <p class="hint">Drag to orbit, scroll to zoom, right-drag to pan. Edit the config block in <code>index.html</code> to add furniture.</p>
+      <h1 id="room-name">Room</h1>
+      <div class="dims" id="room-dims"></div>
+      <p class="hint">Drag to orbit, scroll to zoom, right-drag to pan. Edit <code>room.config.js</code> to change the room.</p>
 
-      <h2>Room (feet)</h2>
-      <label>Width <input id="in-width" type="number" min="1" step="0.5"></label>
-      <label>Length <input id="in-length" type="number" min="1" step="0.5"></label>
-      <label>Height <input id="in-height" type="number" min="1" step="0.5"></label>
+      <div class="buttons">
+        <button id="btn-reset">Reset view</button>
+        <button id="btn-top">Top view</button>
+        <button id="btn-inside">Inside</button>
+      </div>
+      <label class="check"><input id="chk-labels" type="checkbox" checked> Show labels</label>
 
+      <h2>Room (decimal feet)</h2>
+      <label class="row">Width <input id="in-width" type="number" min="1" step="0.25"></label>
+      <label class="row">Length <input id="in-length" type="number" min="1" step="0.25"></label>
+      <label class="row">Height <input id="in-height" type="number" min="1" step="0.25"></label>
+
+      <h2>Openings</h2>
+      <ul class="legend" id="legend-openings"></ul>
+      <h2>Fixtures</h2>
+      <ul class="legend" id="legend-fixtures"></ul>
       <h2>Furniture</h2>
-      <ul id="legend"></ul>
+      <ul class="legend" id="legend-furniture"></ul>
+      <h2>Exterior</h2>
+      <ul class="legend" id="legend-exterior"></ul>
 
+      <h2>Spec check</h2>
+      <div id="issues"></div>
       <div id="stats"></div>
     </aside>
     <div id="view"></div>
@@ -94,6 +95,7 @@
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+    const G = window.RoomGeometry;
     const config = window.ROOM_CONFIG;
     const view = document.getElementById('view');
 
@@ -107,157 +109,425 @@
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0f1013);
 
-    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 500);
+    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.maxPolarAngle = Math.PI / 2 - 0.02; // don't go below the floor
+    controls.maxPolarAngle = Math.PI / 2 - 0.02; // never go below the floor
 
-    // ---------- lights ----------
     scene.add(new THREE.HemisphereLight(0xffffff, 0x444455, 0.9));
     const sun = new THREE.DirectionalLight(0xffffff, 1.2);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
-    scene.add(sun);
+    scene.add(sun, sun.target);
 
-    // ---------- room group (rebuilt whenever config changes) ----------
-    let roomGroup = null;
+    // ---------- materials ----------
+    const M = {
+      floor:   new THREE.MeshStandardMaterial({ color: 0xb8a58a, roughness: 0.9 }),
+      wall:    new THREE.MeshStandardMaterial({ color: 0xe8e4dc, roughness: 1 }),
+      nook:    new THREE.MeshStandardMaterial({ color: 0xd9d4ca, roughness: 1 }),
+      door:    new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.6 }),
+      bifold:  new THREE.MeshStandardMaterial({ color: 0xf4f1ea, roughness: 0.8 }),
+      trim:    new THREE.MeshStandardMaterial({ color: 0xfafafa, roughness: 0.7 }),
+      glass:   new THREE.MeshStandardMaterial({ color: 0x9fd3ff, transparent: true, opacity: 0.35, side: THREE.DoubleSide, roughness: 0.1 }),
+      ground:  new THREE.MeshStandardMaterial({ color: 0x2f3a2e, roughness: 1 }),
+      pad:     new THREE.MeshStandardMaterial({ color: 0x9a9a95, roughness: 0.95 }),
+      ac:      new THREE.MeshStandardMaterial({ color: 0xb9bfc4, roughness: 0.5, metalness: 0.3 }),
+      acTop:   new THREE.MeshStandardMaterial({ color: 0x3a3f44, roughness: 0.6 }),
+      drain:   new THREE.MeshStandardMaterial({ color: 0x24262a, roughness: 0.4, metalness: 0.5 }),
+      line:    new THREE.LineBasicMaterial({ color: 0x1b1b1b }),
+      lineSoft: new THREE.LineBasicMaterial({ color: 0x555a66 }),
+    };
+
+    // yaw so a +z-facing plane faces the [x,z] normal n
+    const yawOf = (n) => Math.atan2(n[0], n[1]);
+
+    let roomGroup = null, labelGroup = null;
+    const wallGroups = {};
+
+    // ---------- labels ----------
+    function makeLabel(text) {
+      const c = document.createElement('canvas'), ctx = c.getContext('2d');
+      const font = '600 26px system-ui, -apple-system, sans-serif';
+      ctx.font = font;
+      const pad = 12, tw = ctx.measureText(text).width;
+      c.width = Math.ceil(tw + pad * 2); c.height = 42;
+      ctx.font = font;
+      ctx.fillStyle = 'rgba(15,16,19,0.82)';
+      ctx.beginPath(); ctx.roundRect(0, 0, c.width, c.height, 8); ctx.fill();
+      ctx.fillStyle = '#ffffff'; ctx.textBaseline = 'middle';
+      ctx.fillText(text, pad, c.height / 2);
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+      const s = 0.012;
+      sp.scale.set(c.width * s, c.height * s, 1);
+      sp.renderOrder = 10;
+      sp.userData.kind = 'label';
+      return sp;
+    }
+    // Labels for openings are parented to their wall group so they hide with it.
+    let labelSprites = [];
+    function label(text, x, y, z, parent = labelGroup) {
+      const sp = makeLabel(text); sp.position.set(x, y, z);
+      sp.visible = document.getElementById('chk-labels').checked;
+      parent.add(sp); labelSprites.push(sp);
+      return sp;
+    }
+
+    // ---------- builders ----------
+    function panelMesh(frame, p, mat, normal = frame.n) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(p.w, p.h), mat);
+      const [x, z] = G.toWorld(frame, p.u + p.w / 2, p.inward ?? 0);
+      m.position.set(x, p.v + p.h / 2, z);
+      m.rotation.y = yawOf(normal);
+      m.receiveShadow = true;
+      m.userData.kind = 'wall-panel';
+      return m;
+    }
+
+    // Local frame at a point on the wall: +z = inward normal, +x = latch direction.
+    function localGroupAt(frame, along, inward = 0) {
+      const g = new THREE.Group();
+      const [x, z] = G.toWorld(frame, along, inward);
+      g.position.set(x, 0, z);
+      g.rotation.y = yawOf(frame.n);
+      // after rotation local +x maps to world (n.z, -n.x); sign relative to u:
+      g.userData.uSign = Math.sign(frame.n[1] * frame.u[0] - frame.n[0] * frame.u[1]);
+      return g;
+    }
+
+    function buildDoor(frame, o, wallGroup) {
+      const hingeAlong = o.hinge === 'end' ? o.from + o.width : o.from;
+      const g = localGroupAt(frame, hingeAlong);
+      g.name = o.id || 'door'; g.userData.kind = 'door';
+      const latch = g.userData.uSign * (o.hinge === 'end' ? -1 : 1); // local x toward the latch when closed
+
+      // leaf shown open 90°, projecting into the room
+      const leaf = new THREE.Mesh(new THREE.BoxGeometry(0.15, o.height, o.width), M.door);
+      leaf.position.set(0, o.height / 2, o.width / 2);
+      leaf.castShadow = true;
+      g.add(leaf);
+
+      // frame outline in the opening
+      const jamb = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(o.width, o.height, 0.25)), M.line);
+      jamb.position.set(latch * o.width / 2, o.height / 2, 0);
+      g.add(jamb);
+
+      // swing arc on the floor
+      const pts = [new THREE.Vector3(0, 0.02, 0)];
+      for (let i = 0; i <= 24; i++) {
+        const t = (i / 24) * Math.PI / 2;
+        pts.push(new THREE.Vector3(latch * o.width * Math.cos(t), 0.02, o.width * Math.sin(t)));
+      }
+      g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), M.line));
+
+      const [lx, lz] = G.toWorld(frame, hingeAlong + (o.hinge === 'end' ? -1 : 1) * o.width / 2, 1.2);
+      label(`Door ${G.fmtFt(o.width)}`, lx, o.height + 0.6, lz, wallGroup);
+      return g;
+    }
+
+    function buildWindow(frame, o) {
+      const g = localGroupAt(frame, o.from + o.width / 2);
+      g.name = o.id || 'window'; g.userData.kind = 'window';
+      const yc = o.sill + o.height / 2;
+      const outline = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(o.width, o.height, 0.3)), M.line);
+      outline.position.set(0, yc, 0);
+      const glass = new THREE.Mesh(new THREE.PlaneGeometry(o.width - 0.15, o.height - 0.15), M.glass);
+      glass.position.set(0, yc, 0);
+      const sill = new THREE.Mesh(new THREE.BoxGeometry(o.width + 0.3, 0.08, 0.45), M.trim);
+      sill.position.set(0, o.sill, 0.15);
+      g.add(outline, glass, sill);
+      // g is a local frame (+z = into the room), so the label is placed in local coords
+      label(`Window ${G.fmtFt(o.width)}`, 0, o.sill + o.height + 0.6, 0.4, g);
+      return g;
+    }
+
+    function buildCloset(frame, o, H) {
+      const g = new THREE.Group();
+      g.name = o.id || 'closet'; g.userData.kind = 'closet';
+      const afrom = o.alcoveFrom ?? o.from, aw = o.alcoveWidth ?? o.width, depth = o.depth;
+      const negU = [-frame.u[0], -frame.u[1]], negN = [-frame.n[0], -frame.n[1]];
+
+      // alcove floor
+      const rect = G.closetAlcove(config.room, o);
+      const floor = new THREE.Mesh(new THREE.PlaneGeometry(rect.w, rect.d), M.floor);
+      floor.rotation.x = -Math.PI / 2;
+      floor.position.set(rect.x + rect.w / 2, 0, rect.z + rect.d / 2);
+      floor.receiveShadow = true;
+      g.add(floor);
+
+      // alcove back wall (faces into the room), two side walls, and the stubs
+      // on the wall line between the alcove edges and the opening (face into the alcove)
+      g.add(panelMesh(frame, { u: afrom, v: 0, w: aw, h: H, inward: -depth }, M.wall, frame.n));
+      const side = (along, normal) => {
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(depth, H), M.wall);
+        const [x, z] = G.toWorld(frame, along, -depth / 2);
+        m.position.set(x, H / 2, z); m.rotation.y = yawOf(normal); m.userData.kind = 'wall-panel';
+        return m;
+      };
+      g.add(side(afrom, frame.u), side(afrom + aw, negU));
+      if (o.from > afrom + G.EPS) g.add(panelMesh(frame, { u: afrom, v: 0, w: o.from - afrom, h: H }, M.wall, negN));
+      const endGap = (afrom + aw) - (o.from + o.width);
+      if (endGap > G.EPS) g.add(panelMesh(frame, { u: o.from + o.width, v: 0, w: endGap, h: H }, M.wall, negN));
+      // inside face of the header above the opening
+      g.add(panelMesh(frame, { u: o.from, v: o.height, w: o.width, h: H - o.height }, M.wall, negN));
+
+      // bifold doors: two pairs, each hinged at a jamb and folded 60° into the room
+      const leafLen = o.width / 4, ang = Math.PI / 3;
+      const a = leafLen * Math.cos(ang), f = leafLen * Math.sin(ang);
+      const pairs = [
+        [[o.from, 0], [o.from + a, f], [o.from + 2 * a, 0]],
+        [[o.from + o.width, 0], [o.from + o.width - a, f], [o.from + o.width - 2 * a, 0]],
+      ];
+      for (const pair of pairs) for (let i = 0; i < 2; i++) {
+        const [p, q] = [G.toWorld(frame, ...pair[i]), G.toWorld(frame, ...pair[i + 1])];
+        const leaf = new THREE.Mesh(new THREE.BoxGeometry(leafLen, o.height, 0.08), M.bifold);
+        leaf.position.set((p[0] + q[0]) / 2, o.height / 2, (p[1] + q[1]) / 2);
+        leaf.rotation.y = Math.atan2(-(q[1] - p[1]), q[0] - p[0]);
+        leaf.castShadow = true;
+        leaf.add(new THREE.LineSegments(new THREE.EdgesGeometry(leaf.geometry), M.line));
+        g.add(leaf);
+      }
+      const [lx, lz] = G.toWorld(frame, afrom + aw / 2, -depth / 2);
+      label(`Closet ${G.fmtFt(aw)} × ${G.fmtFt(depth)}`, lx, o.height + 0.6, lz, g);
+      return g;
+    }
+
+    function boxItem(f, mat, kind) {
+      const geo = new THREE.BoxGeometry(f.w, f.h, f.d);
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(f.x + f.w / 2, f.h / 2, f.z + f.d / 2);
+      mesh.castShadow = mesh.receiveShadow = true;
+      mesh.name = f.id || f.name || kind; mesh.userData.kind = kind;
+      const outline = new THREE.LineSegments(new THREE.EdgesGeometry(geo), M.line);
+      outline.position.copy(mesh.position);
+      mesh.add(outline); outline.position.set(0, 0, 0);
+      return mesh;
+    }
+
+    function buildExterior(ex) {
+      const g = new THREE.Group(); g.name = 'exterior';
+      const { room } = config;
+      const padRect = G.exteriorRect(room, ex, ex.pad);
+      const padH = 0.3;
+      const pad = new THREE.Mesh(new THREE.BoxGeometry(padRect.w, padH, padRect.d), M.pad);
+      pad.position.set(padRect.x + padRect.w / 2, padH / 2, padRect.z + padRect.d / 2);
+      pad.receiveShadow = true; pad.name = 'pad'; pad.userData.kind = 'pad';
+      g.add(pad);
+      label(ex.pad.name || 'Pad', padRect.x + padRect.w - 1.6, padH + 0.5, padRect.z + padRect.d - 0.6);
+
+      if (ex.ac) {
+        const r = G.exteriorRect(room, ex, ex.ac);
+        const unit = boxItem({ x: r.x, z: r.z, w: r.w, d: r.d, h: ex.ac.h, id: 'ac' }, M.ac, 'ac');
+        unit.position.y += padH;
+        const fan = new THREE.Mesh(new THREE.TorusGeometry(Math.min(r.w, r.d) * 0.36, 0.05, 8, 40), M.acTop);
+        fan.rotation.x = Math.PI / 2; fan.position.set(0, ex.ac.h / 2 + 0.02, 0);
+        const grille = new THREE.Mesh(new THREE.CircleGeometry(Math.min(r.w, r.d) * 0.34, 40), M.acTop);
+        grille.rotation.x = -Math.PI / 2; grille.position.set(0, ex.ac.h / 2 + 0.005, 0);
+        unit.add(fan, grille);
+        g.add(unit);
+        label(ex.ac.name || 'AC unit', r.x + r.w / 2, padH + ex.ac.h + 0.6, r.z + r.d / 2);
+      }
+      if (ex.drain) {
+        const r = G.drainRect(room, ex, ex.drain);
+        const cx = r.x + r.w / 2, cz = r.z + r.d / 2, rad = r.w / 2;
+        const disc = new THREE.Mesh(new THREE.CylinderGeometry(rad, rad, 0.03, 32), M.drain);
+        disc.position.set(cx, padH + 0.015, cz); disc.name = 'drain'; disc.userData.kind = 'drain';
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(rad * 1.25, 0.03, 8, 32), M.acTop);
+        ring.rotation.x = Math.PI / 2; ring.position.set(cx, padH + 0.02, cz);
+        g.add(disc, ring);
+        label(ex.drain.name || 'Drain', cx, padH + 0.7, cz);
+      }
+      return g;
+    }
+
+    // ---------- room assembly ----------
+    function disposeGroup(g) {
+      g.traverse(o => { o.geometry?.dispose(); if (o.material?.map) o.material.map.dispose(); if (o.isSprite) o.material.dispose(); });
+      scene.remove(g);
+    }
 
     function buildRoom() {
-      if (roomGroup) {
-        scene.remove(roomGroup);
-        roomGroup.traverse(o => { o.geometry?.dispose(); o.material?.dispose?.(); });
-      }
-      roomGroup = new THREE.Group();
-      scene.add(roomGroup);
+      if (roomGroup) { disposeGroup(roomGroup); disposeGroup(labelGroup); }
+      roomGroup = new THREE.Group(); roomGroup.name = 'room';
+      labelGroup = new THREE.Group(); labelGroup.name = 'labels';
+      labelSprites = [];
+      scene.add(roomGroup, labelGroup);
+      for (const k in wallGroups) delete wallGroups[k];
 
       const { width: W, length: L, height: H } = config.room;
 
-      // Floor
-      const floorMat = new THREE.MeshStandardMaterial({ color: 0xb8a58a, roughness: 0.9 });
-      const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, L), floorMat);
-      floor.rotation.x = -Math.PI / 2;
-      floor.position.set(W / 2, 0, L / 2);
-      floor.receiveShadow = true;
+      // floor + 1 ft grid + outline
+      const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, L), M.floor);
+      floor.rotation.x = -Math.PI / 2; floor.position.set(W / 2, 0, L / 2);
+      floor.receiveShadow = true; floor.name = 'floor'; floor.userData.kind = 'floor';
       roomGroup.add(floor);
-
-      // Walls: planes facing inward. Because they are single-sided, any wall
-      // between the camera and the room is culled, so you can always see in.
-      const wallMat = new THREE.MeshStandardMaterial({ color: 0xe8e4dc, roughness: 1, side: THREE.FrontSide });
-      const walls = [
-        { size: [W, H], pos: [W / 2, H / 2, 0],  rotY: 0 },            // back (z = 0)
-        { size: [W, H], pos: [W / 2, H / 2, L],  rotY: Math.PI },      // front (z = L)
-        { size: [L, H], pos: [0, H / 2, L / 2],  rotY: Math.PI / 2 },  // left (x = 0)
-        { size: [L, H], pos: [W, H / 2, L / 2],  rotY: -Math.PI / 2 }, // right (x = W)
-      ];
-      for (const w of walls) {
-        const m = new THREE.Mesh(new THREE.PlaneGeometry(...w.size), wallMat);
-        m.position.set(...w.pos);
-        m.rotation.y = w.rotY;
-        m.receiveShadow = true;
-        roomGroup.add(m);
-      }
-
-      // Floor perimeter outline for readability
-      const outlinePts = [[0, 0], [W, 0], [W, L], [0, L], [0, 0]].map(([x, z]) => new THREE.Vector3(x, 0.01, z));
-      roomGroup.add(new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints(outlinePts),
-        new THREE.LineBasicMaterial({ color: 0x555a66 })
-      ));
-
-      // 1-foot grid on the floor
-      const grid = new THREE.GridHelper(Math.max(W, L), Math.max(W, L), 0x8a7d69, 0xa89a84);
+      const gmax = Math.ceil(Math.max(W, L));
+      const grid = new THREE.GridHelper(gmax, gmax, 0x8a7d69, 0xa89a84);
       grid.position.set(W / 2, 0.005, L / 2);
-      // GridHelper is square; clip it to the room by scaling each axis
-      grid.scale.set(W / Math.max(W, L), 1, L / Math.max(W, L));
-      grid.material.opacity = 0.35;
-      grid.material.transparent = true;
+      grid.scale.set(W / gmax, 1, L / gmax);
+      grid.material.opacity = 0.35; grid.material.transparent = true;
       roomGroup.add(grid);
+      const outlinePts = [[0, 0], [W, 0], [W, L], [0, L], [0, 0]].map(([x, z]) => new THREE.Vector3(x, 0.01, z));
+      roomGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(outlinePts), M.lineSoft));
 
-      // Furniture
-      for (const f of config.furniture) {
-        const geo = new THREE.BoxGeometry(f.w, f.h, f.d);
-        const mat = new THREE.MeshStandardMaterial({ color: f.color || '#888888', roughness: 0.7 });
-        const mesh = new THREE.Mesh(geo, mat);
-        mesh.position.set(f.x + f.w / 2, f.h / 2, f.z + f.d / 2);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        roomGroup.add(mesh);
-
-        const outline = new THREE.LineSegments(
-          new THREE.EdgesGeometry(geo),
-          new THREE.LineBasicMaterial({ color: 0x111111 })
-        );
-        outline.position.copy(mesh.position);
-        roomGroup.add(outline);
+      // walls with openings; each wall's group carries its normal for culling
+      for (const wall of G.WALLS) {
+        const frame = G.wallFrame(config.room, wall);
+        const wg = new THREE.Group();
+        wg.name = `wall-${wall}`; wg.userData = { kind: 'wall', normal: frame.n, origin: frame.origin };
+        const ops = (config.openings || []).filter(o => o.wall === wall).map(o => ({ ...o, ...G.openingSpan(o) }));
+        for (const p of G.wallPanels(frame.length, H, ops)) wg.add(panelMesh(frame, p, M.wall));
+        for (const o of ops) {
+          if (o.type === 'door') wg.add(buildDoor(frame, o, wg));
+          else if (o.type === 'window') wg.add(buildWindow(frame, o));
+          else if (o.type === 'closet') wg.add(buildCloset(frame, o, H));
+        }
+        roomGroup.add(wg); wallGroups[wall] = wg;
       }
 
-      // Light + camera framing relative to the room size
-      sun.position.set(W * 0.8, H * 2.2, L * 0.6);
+      for (const f of config.fixtures || []) {
+        roomGroup.add(boxItem(f, M.nook, 'fixture'));
+        label(f.name || f.id, f.x + f.w / 2, Math.min(f.h, H) + 0.5, f.z + f.d / 2);
+      }
+      for (const f of config.furniture || []) {
+        const mat = new THREE.MeshStandardMaterial({ color: f.color || '#888888', roughness: 0.7 });
+        roomGroup.add(boxItem(f, mat, 'furniture'));
+        label(f.name || f.id, f.x + f.w / 2, f.h + 0.5, f.z + f.d / 2);
+      }
+      if (config.exterior) roomGroup.add(buildExterior(config.exterior));
+
+      // light framing
+      sun.position.set(W * 0.9, H * 2.4, L * 0.8);
       sun.target.position.set(W / 2, 0, L / 2);
-      scene.add(sun.target);
-      const s = Math.max(W, L, H);
+      const s = Math.max(W, L, H) * 1.5;
       Object.assign(sun.shadow.camera, { left: -s, right: s, top: s, bottom: -s, near: 0.5, far: s * 5 });
       sun.shadow.camera.updateProjectionMatrix();
 
-      controls.target.set(W / 2, H / 3, L / 2);
-      updateLegend();
+      updatePanel();
     }
 
-    function frameCamera() {
+    // ground plane (outside the room), sized to the room
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), M.ground);
+    ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; ground.name = 'ground';
+    scene.add(ground);
+    function fitGround() {
+      const { width: W, length: L } = config.room;
+      const s = Math.max(W, L) * 8;
+      ground.scale.set(s, s, 1); ground.position.set(W / 2, -0.02, L / 2);
+    }
+
+    // ---------- camera framing ----------
+    const VIEW_DIRS = {
+      default: new THREE.Vector3(0.75, 0.8, 1).normalize(),
+      top: new THREE.Vector3(0, 1, 0.002).normalize(), // back wall at the top of the screen, like the plan
+    };
+    function frameCamera(mode = 'default') {
+      // frame the room itself, not the whole exterior, so the room sits centred
       const { width: W, length: L, height: H } = config.room;
-      const s = Math.max(W, L);
-      camera.position.set(W / 2 + s * 0.9, H * 1.6, L / 2 + s * 1.1);
+      const center = new THREE.Vector3(W / 2, H * 0.35, L / 2);
+      const radius = Math.hypot(W, L, H) / 2;
+      const vHalf = THREE.MathUtils.degToRad(camera.fov / 2);
+      const hHalf = Math.atan(Math.tan(vHalf) * camera.aspect);
+      const dist = radius / Math.sin(Math.min(vHalf, hHalf)) * 1.15;
+      camera.position.copy(center).addScaledVector(VIEW_DIRS[mode], dist);
+      controls.target.copy(center);
+      controls.update();
+    }
+    function insideView() {
+      const { width: W, length: L } = config.room;
+      camera.position.set(W * 0.85, 5.5, L * 0.85);
+      controls.target.set(W * 0.3, 4, L * 0.15);
       controls.update();
     }
 
-    // ---------- panel ----------
-    const inputs = {
-      width: document.getElementById('in-width'),
-      length: document.getElementById('in-length'),
-      height: document.getElementById('in-height'),
-    };
-    for (const [key, el] of Object.entries(inputs)) {
-      el.value = config.room[key];
-      el.addEventListener('input', () => {
-        const v = parseFloat(el.value);
-        if (Number.isFinite(v) && v > 0) { config.room[key] = v; buildRoom(); }
-      });
+    // hide any wall (and its doors/windows) that sits between the camera and the room
+    const tmp = new THREE.Vector3();
+    function cullWalls() {
+      for (const wall of G.WALLS) {
+        const wg = wallGroups[wall]; if (!wg) continue;
+        const { normal: n, origin: o } = wg.userData;
+        tmp.set(camera.position.x - o[0], 0, camera.position.z - o[1]);
+        wg.visible = (tmp.x * n[0] + tmp.z * n[1]) > 0;
+      }
     }
 
-    function updateLegend() {
-      const ul = document.getElementById('legend');
-      ul.innerHTML = '';
-      for (const f of config.furniture) {
-        const li = document.createElement('li');
-        li.innerHTML = `<span class="swatch" style="background:${f.color}"></span>
-                        <span>${f.name}</span>
-                        <span class="dims">${f.w}' × ${f.d}' × ${f.h}'</span>`;
-        ul.appendChild(li);
-      }
+    // ---------- panel ----------
+    const $ = (id) => document.getElementById(id);
+    const inputs = { width: $('in-width'), length: $('in-length'), height: $('in-height') };
+    for (const [key, el] of Object.entries(inputs)) {
+      el.value = +config.room[key].toFixed(3);
+      el.addEventListener('input', () => {
+        const v = parseFloat(el.value);
+        if (Number.isFinite(v) && v > 0) { config.room[key] = v; buildRoom(); fitGround(); }
+      });
+    }
+    $('btn-reset').addEventListener('click', () => frameCamera('default'));
+    $('btn-top').addEventListener('click', () => frameCamera('top'));
+    $('btn-inside').addEventListener('click', insideView);
+    $('chk-labels').addEventListener('change', (e) => { for (const sp of labelSprites) sp.visible = e.target.checked; });
+
+    function li(ul, swatch, text, meta) {
+      const el = document.createElement('li');
+      el.innerHTML = `<span class="swatch" style="background:${swatch}"></span><span>${text}</span><span class="meta">${meta}</span>`;
+      ul.appendChild(el);
+    }
+    function updatePanel() {
       const { width: W, length: L, height: H } = config.room;
-      document.getElementById('stats').textContent =
-        `Floor area: ${(W * L).toFixed(1)} sq ft · Volume: ${(W * L * H).toFixed(0)} cu ft`;
+      $('room-name').textContent = config.name || 'Room';
+      $('room-dims').textContent = `${G.fmtFt(W)} × ${G.fmtFt(L)} · ceiling ${G.fmtFt(H)}`;
+
+      const lo = $('legend-openings'); lo.innerHTML = '';
+      for (const o of config.openings || []) {
+        const sw = { door: '#8b5a2b', window: '#9fd3ff', closet: '#f4f1ea' }[o.type] || '#888';
+        const meta = o.type === 'window' ? `${G.fmtFt(o.width)} w · sill ${G.fmtFt(o.sill)}`
+                   : o.type === 'closet' ? `${G.fmtFt(o.alcoveWidth ?? o.width)} × ${G.fmtFt(o.depth)}`
+                   : `${G.fmtFt(o.width)} × ${G.fmtFt(o.height)}`;
+        li(lo, sw, `${o.id || o.type} · ${o.wall} wall`, meta);
+      }
+      const lf = $('legend-fixtures'); lf.innerHTML = '';
+      for (const f of config.fixtures || []) li(lf, '#d9d4ca', f.name || f.id, `${G.fmtFt(f.w)} × ${G.fmtFt(f.d)}`);
+      const lu = $('legend-furniture'); lu.innerHTML = '';
+      for (const f of config.furniture || []) li(lu, f.color || '#888', f.name || f.id, `${G.fmtFt(f.w)} × ${G.fmtFt(f.d)} × ${G.fmtFt(f.h)}`);
+      const le = $('legend-exterior'); le.innerHTML = '';
+      const ex = config.exterior;
+      if (ex) {
+        if (ex.pad) li(le, '#9a9a95', ex.pad.name || 'Pad', `${G.fmtFt(ex.pad.w)} × ${G.fmtFt(ex.pad.d)}`);
+        if (ex.ac) li(le, '#b9bfc4', ex.ac.name || 'AC unit', `${G.fmtFt(ex.ac.w)} × ${G.fmtFt(ex.ac.d)} × ${G.fmtFt(ex.ac.h)}`);
+        if (ex.drain) li(le, '#24262a', ex.drain.name || 'Drain', `${G.fmtFt(ex.drain.out)} from wall`);
+      }
+
+      const issues = G.validate(config);
+      const box = $('issues');
+      box.className = issues.length ? 'bad' : 'ok';
+      box.innerHTML = issues.length ? `<ul>${issues.map(i => `<li>${i}</li>`).join('')}</ul>` : 'All spec rules pass.';
+      $('stats').textContent = `Floor area ${(W * L).toFixed(1)} sq ft · Volume ${(W * L * H).toFixed(0)} cu ft`;
     }
 
     // ---------- resize / loop ----------
     function resize() {
       const w = view.clientWidth, h = view.clientHeight;
-      renderer.setSize(w, h, false);
+      if (!w || !h) return;
+      renderer.setSize(w, h); // also sets the canvas CSS size, so HiDPI screens don't overflow
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
     }
+    new ResizeObserver(resize).observe(view);
     window.addEventListener('resize', resize);
 
     buildRoom();
+    fitGround();
     resize();
-    frameCamera();
+    frameCamera('default');
 
     renderer.setAnimationLoop(() => {
       controls.update();
+      cullWalls();
       renderer.render(scene, camera);
     });
 
-    window.__room = { scene, camera, config, buildRoom }; // handy for console tinkering
+    // exposed for the test suite and console tinkering
+    window.__room = { THREE, scene, camera, controls, renderer, config, buildRoom, frameCamera, get roomGroup() { return roomGroup; } };
   </script>
 </body>
 </html>

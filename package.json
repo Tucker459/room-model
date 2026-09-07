@@ -1,0 +1,16 @@
+{
+  "name": "room-model",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Interactive 3-D layout of Bedroom 6 with a spec-driven test suite",
+  "scripts": {
+    "test": "node --test \"test/*.test.js\"",
+    "test:spec": "node --test test/spec.test.js",
+    "test:render": "node --test test/render.test.js",
+    "serve": "python3 -m http.server 8000"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1",
+    "three": "0.160.0"
+  }
+}
