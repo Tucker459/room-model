@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Room Model</title>
+  <style>
+    :root {
+      --panel-bg: #1e1f24;
+      --panel-fg: #e6e6e6;
+      --muted: #9aa0a6;
+      --accent: #4c8bf5;
+      --border: #33353c;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; font-family: system-ui, -apple-system, Segoe UI, sans-serif; background: #0f1013; color: var(--panel-fg); }
+    #app { display: flex; height: 100%; }
+    #panel {
+      width: 280px; flex: 0 0 280px; padding: 16px; overflow-y: auto;
+      background: var(--panel-bg); border-right: 1px solid var(--border);
+    }
+    #panel h1 { font-size: 16px; margin: 0 0 4px; }
+    #panel p.hint { font-size: 12px; color: var(--muted); margin: 0 0 16px; line-height: 1.4; }
+    #panel h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 18px 0 8px; }
+    label { display: grid; grid-template-columns: 1fr 80px; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 8px; }
+    input[type=number] {
+      width: 100%; padding: 4px 6px; background: #121317; color: var(--panel-fg);
+      border: 1px solid var(--border); border-radius: 4px; font-size: 13px;
+    }
+    ul#legend { list-style: none; padding: 0; margin: 0; font-size: 13px; }
+    ul#legend li { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+    ul#legend .swatch { width: 14px; height: 14px; border-radius: 3px; flex: 0 0 14px; }
+    ul#legend .dims { color: var(--muted); margin-left: auto; font-size: 12px; }
+    #stats { font-size: 12px; color: var(--muted); margin-top: 12px; }
+    #view { flex: 1; position: relative; }
+    canvas { display: block; }
+    @media (max-width: 700px) {
+      #app { flex-direction: column; }
+      #panel { width: auto; flex: 0 0 auto; max-height: 45%; border-right: 0; border-bottom: 1px solid var(--border); }
+    }
+  </style>
+
+  <!-- ============================================================
+       ROOM CONFIG — edit this block to describe your room.
+       All measurements are in FEET.
+       Coordinate system: x runs along the room's width (left → right),
+       z runs along its length (back wall → front), y is up.
+       (0, 0) is the back-left corner of the floor.
+       ============================================================ -->
+  <script>
+    window.ROOM_CONFIG = {
+      room: { width: 12, length: 14, height: 9 },
+      furniture: [
+        // name, x/z = position of the piece's back-left corner on the floor
+        // w = size along x, d = size along z, h = height
+        { name: "Bed (queen)",  x: 3.5, z: 0.25, w: 5,   d: 6.7, h: 2,   color: "#7f8cff" },
+        { name: "Nightstand",   x: 1.5, z: 0.25, w: 1.7, d: 1.5, h: 2,   color: "#c9a26b" },
+        { name: "Nightstand",   x: 8.8, z: 0.25, w: 1.7, d: 1.5, h: 2,   color: "#c9a26b" },
+        { name: "Dresser",      x: 0.25, z: 8,   w: 1.6, d: 5,   h: 2.8, color: "#a3775b" },
+        { name: "Desk",         x: 8,   z: 11.5, w: 3.8, d: 2,   h: 2.5, color: "#6bb3a0" },
+      ],
+    };
+  </script>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="app">
+    <aside id="panel">
+      <h1>Room Model</h1>
+      <p class="hint">Drag to orbit, scroll to zoom, right-drag to pan. Edit the config block in <code>index.html</code> to add furniture.</p>
+
+      <h2>Room (feet)</h2>
+      <label>Width <input id="in-width" type="number" min="1" step="0.5"></label>
+      <label>Length <input id="in-length" type="number" min="1" step="0.5"></label>
+      <label>Height <input id="in-height" type="number" min="1" step="0.5"></label>
+
+      <h2>Furniture</h2>
+      <ul id="legend"></ul>
+
+      <div id="stats"></div>
+    </aside>
+    <div id="view"></div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    const config = window.ROOM_CONFIG;
+    const view = document.getElementById('view');
+
+    // ---------- renderer / scene / camera ----------
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    view.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0f1013);
+
+    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 500);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.maxPolarAngle = Math.PI / 2 - 0.02; // don't go below the floor
+
+    // ---------- lights ----------
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x444455, 0.9));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    scene.add(sun);
+
+    // ---------- room group (rebuilt whenever config changes) ----------
+    let roomGroup = null;
+
+    function buildRoom() {
+      if (roomGroup) {
+        scene.remove(roomGroup);
+        roomGroup.traverse(o => { o.geometry?.dispose(); o.material?.dispose?.(); });
+      }
+      roomGroup = new THREE.Group();
+      scene.add(roomGroup);
+
+      const { width: W, length: L, height: H } = config.room;
+
+      // Floor
+      const floorMat = new THREE.MeshStandardMaterial({ color: 0xb8a58a, roughness: 0.9 });
+      const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, L), floorMat);
+      floor.rotation.x = -Math.PI / 2;
+      floor.position.set(W / 2, 0, L / 2);
+      floor.receiveShadow = true;
+      roomGroup.add(floor);
+
+      // Walls: planes facing inward. Because they are single-sided, any wall
+      // between the camera and the room is culled, so you can always see in.
+      const wallMat = new THREE.MeshStandardMaterial({ color: 0xe8e4dc, roughness: 1, side: THREE.FrontSide });
+      const walls = [
+        { size: [W, H], pos: [W / 2, H / 2, 0],  rotY: 0 },            // back (z = 0)
+        { size: [W, H], pos: [W / 2, H / 2, L],  rotY: Math.PI },      // front (z = L)
+        { size: [L, H], pos: [0, H / 2, L / 2],  rotY: Math.PI / 2 },  // left (x = 0)
+        { size: [L, H], pos: [W, H / 2, L / 2],  rotY: -Math.PI / 2 }, // right (x = W)
+      ];
+      for (const w of walls) {
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(...w.size), wallMat);
+        m.position.set(...w.pos);
+        m.rotation.y = w.rotY;
+        m.receiveShadow = true;
+        roomGroup.add(m);
+      }
+
+      // Floor perimeter outline for readability
+      const outlinePts = [[0, 0], [W, 0], [W, L], [0, L], [0, 0]].map(([x, z]) => new THREE.Vector3(x, 0.01, z));
+      roomGroup.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(outlinePts),
+        new THREE.LineBasicMaterial({ color: 0x555a66 })
+      ));
+
+      // 1-foot grid on the floor
+      const grid = new THREE.GridHelper(Math.max(W, L), Math.max(W, L), 0x8a7d69, 0xa89a84);
+      grid.position.set(W / 2, 0.005, L / 2);
+      // GridHelper is square; clip it to the room by scaling each axis
+      grid.scale.set(W / Math.max(W, L), 1, L / Math.max(W, L));
+      grid.material.opacity = 0.35;
+      grid.material.transparent = true;
+      roomGroup.add(grid);
+
+      // Furniture
+      for (const f of config.furniture) {
+        const geo = new THREE.BoxGeometry(f.w, f.h, f.d);
+        const mat = new THREE.MeshStandardMaterial({ color: f.color || '#888888', roughness: 0.7 });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(f.x + f.w / 2, f.h / 2, f.z + f.d / 2);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        roomGroup.add(mesh);
+
+        const outline = new THREE.LineSegments(
+          new THREE.EdgesGeometry(geo),
+          new THREE.LineBasicMaterial({ color: 0x111111 })
+        );
+        outline.position.copy(mesh.position);
+        roomGroup.add(outline);
+      }
+
+      // Light + camera framing relative to the room size
+      sun.position.set(W * 0.8, H * 2.2, L * 0.6);
+      sun.target.position.set(W / 2, 0, L / 2);
+      scene.add(sun.target);
+      const s = Math.max(W, L, H);
+      Object.assign(sun.shadow.camera, { left: -s, right: s, top: s, bottom: -s, near: 0.5, far: s * 5 });
+      sun.shadow.camera.updateProjectionMatrix();
+
+      controls.target.set(W / 2, H / 3, L / 2);
+      updateLegend();
+    }
+
+    function frameCamera() {
+      const { width: W, length: L, height: H } = config.room;
+      const s = Math.max(W, L);
+      camera.position.set(W / 2 + s * 0.9, H * 1.6, L / 2 + s * 1.1);
+      controls.update();
+    }
+
+    // ---------- panel ----------
+    const inputs = {
+      width: document.getElementById('in-width'),
+      length: document.getElementById('in-length'),
+      height: document.getElementById('in-height'),
+    };
+    for (const [key, el] of Object.entries(inputs)) {
+      el.value = config.room[key];
+      el.addEventListener('input', () => {
+        const v = parseFloat(el.value);
+        if (Number.isFinite(v) && v > 0) { config.room[key] = v; buildRoom(); }
+      });
+    }
+
+    function updateLegend() {
+      const ul = document.getElementById('legend');
+      ul.innerHTML = '';
+      for (const f of config.furniture) {
+        const li = document.createElement('li');
+        li.innerHTML = `<span class="swatch" style="background:${f.color}"></span>
+                        <span>${f.name}</span>
+                        <span class="dims">${f.w}' × ${f.d}' × ${f.h}'</span>`;
+        ul.appendChild(li);
+      }
+      const { width: W, length: L, height: H } = config.room;
+      document.getElementById('stats').textContent =
+        `Floor area: ${(W * L).toFixed(1)} sq ft · Volume: ${(W * L * H).toFixed(0)} cu ft`;
+    }
+
+    // ---------- resize / loop ----------
+    function resize() {
+      const w = view.clientWidth, h = view.clientHeight;
+      renderer.setSize(w, h, false);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+    window.addEventListener('resize', resize);
+
+    buildRoom();
+    resize();
+    frameCamera();
+
+    renderer.setAnimationLoop(() => {
+      controls.update();
+      renderer.render(scene, camera);
+    });
+
+    window.__room = { scene, camera, config, buildRoom }; // handy for console tinkering
+  </script>
+</body>
+</html>
