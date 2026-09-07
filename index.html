@@ -30,11 +30,26 @@
     ul.legend li { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
     ul.legend .swatch { width: 12px; height: 12px; border-radius: 3px; flex: 0 0 12px; }
     ul.legend .meta { color: var(--muted); margin-left: auto; font-size: 12px; text-align: right; white-space: nowrap; }
+    ul.legend input[type=checkbox] { margin: 0; flex: 0 0 auto; accent-color: var(--accent); }
+    ul.legend label { cursor: pointer; }
+    ul.legend li.off { opacity: 0.45; }
+    #panel h2 .sub { text-transform: none; letter-spacing: 0; }
     #issues { font-size: 12px; line-height: 1.4; }
     #issues.ok { color: var(--ok); }
     #issues.bad { color: var(--bad); }
     #issues li { margin-bottom: 4px; }
     #stats { font-size: 12px; color: var(--muted); margin-top: 12px; }
+    #sel-name { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+    #sel-body .buttons { margin-top: 8px; }
+    #view canvas { touch-action: none; }
+    #panel input[type=text], #panel select {
+      width: 100%; padding: 4px 6px; margin-bottom: 6px; font-size: 13px;
+      background: #121317; color: var(--panel-fg); border: 1px solid var(--border); border-radius: 4px;
+    }
+    #panel select { margin-top: 6px; }
+    #layout-msg { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.4; }
+    #layout-msg.bad { color: var(--bad); }
+    button:disabled { opacity: 0.4; cursor: default; border-color: var(--border); }
     #view { flex: 1; min-width: 0; position: relative; overflow: hidden; }
     #view canvas { display: block; width: 100%; height: 100%; }
     @media (max-width: 700px) {
@@ -61,7 +76,8 @@
     <aside id="panel">
       <h1 id="room-name">Room</h1>
       <div class="dims" id="room-dims"></div>
-      <p class="hint">Drag to orbit, scroll to zoom, right-drag to pan. Edit <code>room.config.js</code> to change the room.</p>
+      <p class="hint">Drag the background to orbit, scroll to zoom, right-drag to pan.
+      Drag a piece of furniture to move it.</p>
 
       <div class="buttons">
         <button id="btn-reset">Reset view</button>
@@ -69,6 +85,43 @@
         <button id="btn-inside">Inside</button>
       </div>
       <label class="check"><input id="chk-labels" type="checkbox" checked> Show labels</label>
+
+      <h2>Selected</h2>
+      <p class="hint" id="sel-empty">Click a piece to pick it up. Drag to move it,
+      <b>R</b> turns it a quarter turn, <b>W</b> sends a wall piece to the next wall,
+      arrow keys nudge it an inch (hold shift for 6").</p>
+      <div id="sel-body" hidden>
+        <div id="sel-name"></div>
+        <label class="row"><span id="lab-a">X</span><input id="in-a" type="number" step="0.0833"></label>
+        <label class="row"><span id="lab-b">Z</span><input id="in-b" type="number" step="0.0833"></label>
+        <div class="buttons">
+          <button id="btn-rotate">Rotate 90°</button>
+          <button id="btn-next-wall">Next wall</button>
+          <button id="btn-deselect">Deselect</button>
+        </div>
+      </div>
+
+      <h2>Spec check</h2>
+      <div id="issues"></div>
+
+      <h2>Layout</h2>
+      <input id="in-layout-name" type="text" placeholder="Name this layout" autocomplete="off">
+      <div class="buttons">
+        <button id="btn-save-layout">Save</button>
+        <button id="btn-reset-layout">Reset</button>
+        <button id="btn-export">Export</button>
+        <button id="btn-import">Import</button>
+      </div>
+      <select id="sel-layout" aria-label="Saved layouts"></select>
+      <div class="buttons">
+        <button id="btn-load-layout">Load</button>
+        <button id="btn-delete-layout">Delete</button>
+      </div>
+      <input id="file-import" type="file" accept=".json,application/json" hidden>
+      <div id="layout-msg"></div>
+
+      <h2>Furniture <span class="sub">— tick to place</span></h2>
+      <ul class="legend" id="legend-furniture"></ul>
 
       <h2>Room (decimal feet)</h2>
       <label class="row">Width <input id="in-width" type="number" min="1" step="0.25"></label>
@@ -79,13 +132,8 @@
       <ul class="legend" id="legend-openings"></ul>
       <h2>Fixtures</h2>
       <ul class="legend" id="legend-fixtures"></ul>
-      <h2>Furniture</h2>
-      <ul class="legend" id="legend-furniture"></ul>
       <h2>Exterior</h2>
       <ul class="legend" id="legend-exterior"></ul>
-
-      <h2>Spec check</h2>
-      <div id="issues"></div>
       <div id="stats"></div>
     </aside>
     <div id="view"></div>
@@ -134,6 +182,10 @@
       ac:      new THREE.MeshStandardMaterial({ color: 0xb9bfc4, roughness: 0.5, metalness: 0.3 }),
       acTop:   new THREE.MeshStandardMaterial({ color: 0x3a3f44, roughness: 0.6 }),
       drain:   new THREE.MeshStandardMaterial({ color: 0x24262a, roughness: 0.4, metalness: 0.5 }),
+      mirror:  new THREE.MeshStandardMaterial({ color: 0xdfeaf2, roughness: 0.04, metalness: 0.95 }),
+      cork:    new THREE.MeshStandardMaterial({ color: 0xc9a06a, roughness: 1 }),
+      metal:   new THREE.MeshStandardMaterial({ color: 0xb6bcc4, roughness: 0.35, metalness: 0.6 }),
+      screen:  new THREE.MeshStandardMaterial({ color: 0x0b0d10, roughness: 0.25, emissive: 0x0a1626 }),
       line:    new THREE.LineBasicMaterial({ color: 0x1b1b1b }),
       lineSoft: new THREE.LineBasicMaterial({ color: 0x555a66 }),
     };
@@ -143,6 +195,10 @@
 
     let roomGroup = null, labelGroup = null;
     const wallGroups = {};
+    const itemViews = new Map();          // furniture id -> { item, group, sprite, kind }
+    // the committed layout, for "Reset"
+    const LAYOUT0 = JSON.parse(JSON.stringify(config.furniture || []));
+    const ROOM0 = { ...config.room };
 
     // ---------- labels ----------
     function makeLabel(text) {
@@ -305,6 +361,191 @@
       return mesh;
     }
 
+    // ---------- furniture ----------
+    /*
+     * Floor pieces are built in a local frame: the group sits on the floor at
+     * the footprint centre, local +z is the way the piece faces and local x is
+     * its width. `facing` rotates that frame onto the world axes, so W/D below
+     * are the piece's own width and depth, not its x/z extents.
+     * Wall pieces reuse localGroupAt(): local +z is the inward wall normal.
+     */
+    const FACE_YAW = { 'z+': 0, 'z-': Math.PI, 'x+': Math.PI / 2, 'x-': -Math.PI / 2 };
+
+    let ownedMaterials = [];
+    function shadeMats(color) {
+      const base = new THREE.Color(color || '#888888');
+      const mk = (c, r) => { const m = new THREE.MeshStandardMaterial({ color: c, roughness: r }); ownedMaterials.push(m); return m; };
+      return {
+        main:  mk(base, 0.7),
+        light: mk(base.clone().offsetHSL(0, -0.02, 0.09), 0.75),
+        dark:  mk(base.clone().offsetHSL(0, 0.02, -0.12), 0.6),
+      };
+    }
+    // A box in the piece's local frame: size (w,h,d) centred on (x,y,z).
+    function part(parent, mat, w, h, d, x, y, z) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+      m.position.set(x, y, z);
+      m.castShadow = m.receiveShadow = true;
+      m.add(new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry), M.line));
+      parent.add(m);
+      return m;
+    }
+    function facePlane(parent, mat, w, h, x, y, z) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+      m.position.set(x, y, z);
+      parent.add(m);
+      return m;
+    }
+
+    // shape(group, {W, H, D}, materials, item)
+    const SHAPES = {
+      box(g, s, c) { part(g, c.main, s.W, s.H, s.D, 0, s.H / 2, 0); },
+
+      /*
+       * Chest of drawers, nightstand or cabinet, fronts facing +z. Drawers by
+       * default; `doors: n` (or anything over 4 ft tall) gets hinged doors
+       * instead, with the handles meeting at the middle.
+       */
+      cabinet(g, s, c, f) {
+        part(g, c.main, s.W, s.H, s.D, 0, s.H / 2, 0);
+        const fz = s.D / 2 + 0.02;
+        const doors = f?.doors || (s.H >= 4 ? 2 : 0);
+        if (doors) {
+          const dw = (s.W - 0.14) / doors;
+          for (let i = 0; i < doors; i++) {
+            const x = -s.W / 2 + 0.07 + dw * (i + 0.5);
+            const inner = i < doors / 2 ? dw / 2 - 0.09 : -dw / 2 + 0.09;   // handle toward the centre
+            part(g, c.light, dw - 0.05, s.H - 0.16, 0.04, x, s.H / 2, fz);
+            part(g, c.dark, 0.05, Math.min(0.5, s.H * 0.3), 0.05, x + inner, s.H * 0.52, fz + 0.05);
+          }
+        } else {
+          const rows = Math.max(1, Math.round(s.H / 1.05));
+          const rh = (s.H - 0.14) / rows;
+          for (let i = 0; i < rows; i++) {
+            const y = 0.07 + rh * (i + 0.5);
+            part(g, c.light, s.W - 0.14, rh - 0.06, 0.04, 0, y, fz);
+            part(g, c.dark, (s.W - 0.14) * 0.4, 0.05, 0.05, 0, y, fz + 0.05);
+          }
+        }
+      },
+
+      sofa(g, s, c) {
+        const plinth = 0.45, back = 0.35, armW = 0.3;
+        const seatH = s.H - plinth;
+        part(g, c.dark, s.W, plinth, s.D, 0, plinth / 2, 0);
+        part(g, c.main, s.W, seatH, back, 0, plinth + seatH / 2, -s.D / 2 + back / 2);
+        for (const sx of [-1, 1])
+          part(g, c.main, armW, seatH - 0.35, s.D - back, sx * (s.W / 2 - armW / 2), plinth + (seatH - 0.35) / 2, back / 2);
+        const cw = (s.W - 2 * armW) / 2 - 0.06;
+        for (const sx of [-1, 1]) {
+          part(g, c.light, cw, 0.28, s.D - back - 0.16, sx * (cw / 2 + 0.03), plinth + 0.14, back / 2 + 0.06);
+          part(g, c.light, cw, seatH - 0.5, 0.22, sx * (cw / 2 + 0.03), plinth + 0.28 + (seatH - 0.5) / 2, -s.D / 2 + back + 0.11);
+        }
+      },
+
+      // an artist's easel with a flat-screen TV resting on its shelf
+      'easel-tv'(g, s, c) {
+        const t = 0.11;
+        for (const sx of [-1, 1]) part(g, c.main, t, s.H, t, sx * (s.W / 2 - 0.18), s.H / 2, s.D / 2 - t);
+        part(g, c.main, t, s.H * 0.92, t, 0, s.H * 0.46, -s.D / 2 + t);
+        part(g, c.main, s.W - 0.3, 0.09, t, 0, s.H * 0.72, s.D / 2 - t);          // upper crossbar
+        part(g, c.main, s.W - 0.3, 0.12, s.D * 0.55, 0, 1.5, s.D / 2 - 0.28);     // shelf the TV stands on
+        const tvW = s.W - 0.45, tvH = tvW * 9 / 16;
+        const zTV = s.D / 2 - t + 0.09;
+        part(g, c.dark, tvW, tvH, 0.1, 0, 1.62 + tvH / 2, zTV);
+        facePlane(g, M.screen, tvW - 0.12, tvH - 0.12, 0, 1.62 + tvH / 2, zTV + 0.06);
+      },
+
+      vanity(g, s, c) {
+        const legH = s.H - 0.12;
+        part(g, c.light, s.W, 0.12, s.D, 0, s.H - 0.06, 0);                      // top
+        for (const sx of [-1, 1]) part(g, c.main, 0.1, legH, s.D, sx * (s.W / 2 - 0.05), legH / 2, 0);
+        part(g, c.main, s.W - 0.2, legH, 0.07, 0, legH / 2, -s.D / 2 + 0.035);   // back panel
+        for (let i = 0; i < 3; i++) {                                            // drawer bank on the right
+          const y = 0.42 + i * 0.6;
+          part(g, c.light, s.W * 0.42, 0.5, 0.06, s.W * 0.26, y, s.D / 2 + 0.03);
+          part(g, c.dark, s.W * 0.18, 0.05, 0.05, s.W * 0.26, y, s.D / 2 + 0.08);
+        }
+      },
+
+      rug(g, s, c, f) {
+        const m = part(g, c.main, s.W, s.H, s.D, 0, s.H / 2, 0);
+        m.castShadow = false;
+        const b = Math.min(0.35, Math.min(s.W, s.D) * 0.12);
+        const pts = [[-1, -1], [1, -1], [1, 1], [-1, 1], [-1, -1]]
+          .map(([sx, sz]) => new THREE.Vector3(sx * (s.W / 2 - b), s.H + 0.006, sz * (s.D / 2 - b)));
+        g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), M.line));
+      },
+
+      // --- wall-mounted; y is the bottom of the piece, +z out from the wall ---
+      mirror(g, s, c) {
+        const y = s.H / 2;
+        part(g, c.dark, s.W, s.H, s.D, 0, y, s.D / 2);
+        facePlane(g, M.mirror, s.W - 0.12, s.H - 0.12, 0, y, s.D + 0.005);
+      },
+
+      board(g, s, c) {
+        const y = s.H / 2;
+        part(g, c.dark, s.W, s.H, s.D, 0, y, s.D / 2);
+        facePlane(g, M.cork, s.W - 0.14, s.H - 0.14, 0, y, s.D + 0.005);
+        const notes = [[-0.3, 0.28], [0.16, 0.34], [0.3, -0.2], [-0.18, -0.3]];
+        for (const [u, v] of notes)
+          facePlane(g, c.light, 0.34, 0.42, u * s.W, y + v * s.H, s.D + 0.012);
+      },
+
+      shelves(g, s, c, f) {
+        const n = Math.max(1, f.shelves || 3), t = 0.1;
+        for (let i = 0; i < n; i++) {
+          const y = n === 1 ? (s.H - t) / 2 : i * (s.H - t) / (n - 1);
+          part(g, c.main, s.W, t, s.D, 0, y + t / 2, s.D / 2);
+          for (const sx of [-1, 1])
+            part(g, c.dark, 0.07, 0.22, s.D * 0.65, sx * (s.W / 2 - 0.28), y - 0.11, s.D * 0.4);
+        }
+      },
+
+      rack(g, s, c, f) {
+        const yTop = s.H;
+        const railZ = s.D - 0.22, railY = yTop - 0.12;
+        const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, s.W - 0.15, 12), M.metal);
+        rail.rotation.z = Math.PI / 2;
+        rail.position.set(0, railY, railZ);
+        rail.castShadow = true;
+        g.add(rail);
+        for (const sx of [-1, 1]) {
+          part(g, c.dark, 0.07, 0.3, 0.08, sx * (s.W / 2 - 0.3), yTop - 0.15, 0.04);
+          part(g, c.dark, 0.07, 0.07, railZ, sx * (s.W / 2 - 0.3), yTop - 0.05, railZ / 2);
+        }
+        for (const u of [-0.28, 0, 0.28]) {                                      // empty hangers
+          const hook = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.014, 6, 16, Math.PI), M.metal);
+          hook.position.set(u * s.W, railY, railZ);
+          g.add(hook);
+          part(g, c.light, 0.42, 0.03, 0.03, u * s.W, railY - 0.28, railZ);
+          part(g, c.light, 0.03, 0.28, 0.03, u * s.W, railY - 0.14, railZ);
+        }
+      },
+    };
+
+    function buildFloorItem(f) {
+      const g = new THREE.Group();
+      g.position.set(f.x + f.w / 2, 0, f.z + f.d / 2);
+      g.rotation.y = FACE_YAW[f.facing] ?? 0;
+      g.name = f.id || f.name || 'furniture';
+      g.userData.kind = G.itemKind(f) === 'rug' ? 'rug' : 'furniture';
+      const sideways = f.facing === 'x+' || f.facing === 'x-';
+      const dims = { W: sideways ? f.d : f.w, H: f.h, D: sideways ? f.w : f.d };
+      (SHAPES[f.shape] || SHAPES.box)(g, dims, shadeMats(f.color), f);
+      return g;
+    }
+
+    function buildWallItem(frame, f) {
+      const g = localGroupAt(frame, f.from + f.w / 2);
+      g.position.y = f.y || 0;              // shapes are built from y = 0
+      g.name = f.id || f.name || 'wall-item';
+      g.userData.kind = 'furniture';
+      (SHAPES[f.shape] || SHAPES.box)(g, { W: f.w, H: f.h, D: f.d }, shadeMats(f.color), f);
+      return g;
+    }
+
     function buildExterior(ex) {
       const g = new THREE.Group(); g.name = 'exterior';
       const { room } = config;
@@ -348,7 +589,11 @@
     }
 
     function buildRoom() {
-      if (roomGroup) { disposeGroup(roomGroup); disposeGroup(labelGroup); }
+      if (roomGroup) {
+        disposeGroup(roomGroup); disposeGroup(labelGroup);
+        for (const m of ownedMaterials) m.dispose();
+      }
+      ownedMaterials = [];
       roomGroup = new THREE.Group(); roomGroup.name = 'room';
       labelGroup = new THREE.Group(); labelGroup.name = 'labels';
       labelSprites = [];
@@ -390,10 +635,25 @@
         roomGroup.add(boxItem(f, M.nook, 'fixture'));
         label(f.name || f.id, f.x + f.w / 2, Math.min(f.h, H) + 0.5, f.z + f.d / 2);
       }
+      itemViews.clear();
       for (const f of config.furniture || []) {
-        const mat = new THREE.MeshStandardMaterial({ color: f.color || '#888888', roughness: 0.7 });
-        roomGroup.add(boxItem(f, mat, 'furniture'));
-        label(f.name || f.id, f.x + f.w / 2, f.h + 0.5, f.z + f.d / 2);
+        if (!G.isEnabled(f)) continue;
+        const kind = G.itemKind(f);
+        let g, sprite;
+        if (kind === 'wall') {
+          if (!G.WALLS.includes(f.wall)) continue;
+          g = buildWallItem(G.wallFrame(config.room, f.wall), f);
+          (wallGroups[f.wall] || roomGroup).add(g);   // hides with its wall
+          sprite = label(f.name || f.id, 0, f.h + 0.5, f.d + 0.4, g);
+        } else {
+          g = buildFloorItem(f);
+          roomGroup.add(g);
+          sprite = kind === 'rug'
+            ? label(f.name || f.id, f.x + f.w * 0.15, 0.55, f.z + f.d * 0.12)
+            : label(f.name || f.id, f.x + f.w / 2, f.h + 0.5, f.z + f.d / 2);
+        }
+        g.userData.furnitureId = f.id;
+        itemViews.set(f.id, { item: f, group: g, sprite, kind });
       }
       if (config.exterior) roomGroup.add(buildExterior(config.exterior));
 
@@ -405,6 +665,7 @@
       sun.shadow.camera.updateProjectionMatrix();
 
       updatePanel();
+      drawSelection();
     }
 
     // ground plane (outside the room), sized to the room
@@ -452,11 +713,247 @@
       }
     }
 
+    // ---------- selecting, dragging and turning furniture ----------
+    /*
+     * Click a piece to select it, drag to move it. Floor pieces slide on the
+     * y = 0 plane; wall pieces slide along their own wall and up and down it.
+     * Positions snap to the inch and are clamped to the room, but nothing else
+     * is enforced while you drag — the spec check is what tells you the piece
+     * has landed somewhere it should not be.
+     */
+    const raycaster = new THREE.Raycaster();
+    const pointerNDC = new THREE.Vector2();
+    const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const hitPoint = new THREE.Vector3();
+    const selMat = new THREE.LineBasicMaterial({ color: 0x4c8bf5, depthTest: false });
+    const selGroup = new THREE.Group();
+    selGroup.name = 'selection';
+    selGroup.renderOrder = 9;
+    scene.add(selGroup);
+
+    let selectedId = null, drag = null;
+
+    const selectedView = () => (selectedId ? itemViews.get(selectedId) : null) || null;
+
+    function drawSelection() {
+      for (const c of selGroup.children.splice(0)) c.geometry?.dispose();
+      const v = selectedView();
+      if (!v) return;
+      const f = v.item;
+      let pts;
+      if (v.kind === 'wall') {                       // a frame drawn on the wall face
+        const fr = G.wallFrame(config.room, f.wall);
+        const y0 = f.y || 0, y1 = y0 + f.h, out = f.d + 0.02;
+        const a = G.toWorld(fr, f.from, out), b = G.toWorld(fr, f.from + f.w, out);
+        pts = [[a, y0], [b, y0], [b, y1], [a, y1], [a, y0]]
+          .map(([p, y]) => new THREE.Vector3(p[0], y, p[1]));
+      } else {                                       // a footprint drawn on the floor
+        const r = G.itemRect(f);
+        pts = [[r.x, r.z], [r.x + r.w, r.z], [r.x + r.w, r.z + r.d], [r.x, r.z + r.d], [r.x, r.z]]
+          .map(([x, z]) => new THREE.Vector3(x, 0.03, z));
+      }
+      const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), selMat);
+      line.renderOrder = 9;
+      selGroup.add(line);
+    }
+
+    function select(id) {
+      selectedId = itemViews.has(id) ? id : null;
+      drawSelection();
+      updateSelectedPanel();
+    }
+
+    // Move a piece that is already built, without rebuilding the scene.
+    function moveView(f) {
+      const v = itemViews.get(f.id);
+      if (!v) return;
+      if (v.kind === 'wall') {
+        const [x, z] = G.toWorld(G.wallFrame(config.room, f.wall), f.from + f.w / 2, 0);
+        v.group.position.set(x, f.y || 0, z);
+      } else {
+        v.group.position.set(f.x + f.w / 2, 0, f.z + f.d / 2);
+        if (v.kind === 'rug') v.sprite.position.set(f.x + f.w * 0.15, 0.55, f.z + f.d * 0.12);
+        else v.sprite.position.set(f.x + f.w / 2, f.h + 0.5, f.z + f.d / 2);
+      }
+      drawSelection();
+    }
+
+    function setPointer(e) {
+      const r = renderer.domElement.getBoundingClientRect();
+      pointerNDC.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+      raycaster.setFromCamera(pointerNDC, camera);
+    }
+    // The nearest mesh under the pointer, if it belongs to a piece of furniture.
+    function pickFurniture() {
+      for (const h of raycaster.intersectObject(roomGroup, true)) {
+        if (!h.object.isMesh) continue;
+        for (let o = h.object; o; o = o.parent) if (o.userData.furnitureId) return itemViews.get(o.userData.furnitureId);
+        return null;                                 // a wall or the floor is in the way
+      }
+      return null;
+    }
+    function dragPlane(v) {
+      if (v.kind !== 'wall') return floorPlane;
+      const fr = G.wallFrame(config.room, v.item.wall);
+      return new THREE.Plane().setFromNormalAndCoplanarPoint(
+        new THREE.Vector3(fr.n[0], 0, fr.n[1]),
+        new THREE.Vector3(fr.origin[0], 0, fr.origin[1]));
+    }
+    const alongWall = (fr, p) => (p.x - fr.origin[0]) * fr.u[0] + (p.z - fr.origin[1]) * fr.u[1];
+
+    const canvas = renderer.domElement;
+    // Capture phase: when a drag starts, OrbitControls must not also see the event.
+    canvas.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      setPointer(e);
+      const v = pickFurniture();
+      select(v ? v.item.id : null);
+      if (!v || !raycaster.ray.intersectPlane(dragPlane(v), hitPoint)) return;
+      const f = v.item;
+      drag = v.kind === 'wall'
+        ? { v, plane: dragPlane(v), da: f.from - alongWall(G.wallFrame(config.room, f.wall), hitPoint), dy: (f.y || 0) - hitPoint.y }
+        : { v, plane: floorPlane, dx: f.x - hitPoint.x, dz: f.z - hitPoint.z };
+      controls.enabled = false;
+      canvas.setPointerCapture(e.pointerId);
+      canvas.style.cursor = 'grabbing';
+      e.stopPropagation();
+      e.preventDefault();
+    }, { capture: true });
+
+    canvas.addEventListener('pointermove', (e) => {
+      if (!drag) {
+        if (controls.enabled) { setPointer(e); canvas.style.cursor = pickFurniture() ? 'grab' : ''; }
+        return;
+      }
+      setPointer(e);
+      if (!raycaster.ray.intersectPlane(drag.plane, hitPoint)) return;
+      const f = drag.v.item;
+      if (drag.v.kind === 'wall') {
+        const fr = G.wallFrame(config.room, f.wall);
+        G.placeWallItem(config.room, f, alongWall(fr, hitPoint) + drag.da, hitPoint.y + drag.dy);
+      } else {
+        G.placeFloorItem(config.room, f, hitPoint.x + drag.dx, hitPoint.z + drag.dz);
+      }
+      moveView(f);
+      refreshIssues();
+      updateSelectedPanel();
+    });
+
+    function endDrag(e) {
+      if (!drag) return;
+      drag = null;
+      controls.enabled = true;
+      canvas.style.cursor = '';
+      if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+      buildRoom();          // re-cut the shapes at their new home and refresh the panel
+    }
+    canvas.addEventListener('pointerup', endDrag);
+    canvas.addEventListener('pointercancel', endDrag);
+
+    // Works on every piece: floor pieces turn in plan, wall pieces turn in the
+    // plane of the wall they hang on.
+    function rotateSelected() {
+      const v = selectedView();
+      if (!v) return;
+      G.rotateItem(config.room, v.item);
+      buildRoom();
+    }
+    // Send the selected wall piece round to the next wall.
+    function nextWallSelected() {
+      const v = selectedView();
+      if (!v || v.kind !== 'wall') return;
+      const f = v.item;
+      Object.assign(f, G.nextWall(config.room, f));
+      G.placeWallItem(config.room, f, f.from, f.y || 0);
+      buildRoom();
+    }
+    function nudgeSelected(du, dv, step) {
+      const v = selectedView();
+      if (!v) return false;
+      const f = v.item;
+      if (v.kind === 'wall') G.placeWallItem(config.room, f, f.from + du * step, (f.y || 0) - dv * step);
+      else G.placeFloorItem(config.room, f, f.x + du * step, f.z + dv * step);
+      buildRoom();
+      return true;
+    }
+    const NUDGE_KEYS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+    window.addEventListener('keydown', (e) => {
+      if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+      if (e.key === 'Escape') return select(null);
+      if (!selectedView()) return;
+      if (NUDGE_KEYS[e.key]) {
+        const [du, dv] = NUDGE_KEYS[e.key];
+        if (nudgeSelected(du, dv, e.shiftKey ? G.NUDGE * 6 : G.NUDGE)) e.preventDefault();
+      } else if (e.key === 'r' || e.key === 'R') {
+        rotateSelected();
+      } else if (e.key === 'w' || e.key === 'W') {
+        nextWallSelected();
+      }
+    });
+
+    function resetLayout() {
+      const start = new Map(LAYOUT0.map(f => [f.id, f]));
+      for (const f of config.furniture || []) {
+        const f0 = start.get(f.id);
+        if (f0) Object.assign(f, JSON.parse(JSON.stringify(f0)));
+      }
+      Object.assign(config.room, ROOM0);
+      clearWorking();
+      select(null);
+      buildRoom();
+      sayLayout('Back to the layout in room.config.js.');
+    }
+
+    /*
+     * ---------- saving and loading layouts ----------
+     * Where everything stands is kept in localStorage: the layout you are
+     * working on is written back on every change so a refresh does not lose
+     * it, and named layouts are kept alongside it. Export/Import move the same
+     * JSON in and out as a file. localStorage is unavailable on file:// URLs
+     * in some browsers, so every access degrades to "not saved" rather than
+     * throwing — serve the folder (npm run serve) to get persistence.
+     */
+    const LAYOUTS_KEY = 'room-model:layouts';
+    const WORKING_KEY = 'room-model:working';
+
+    function store() {
+      try { const s = window.localStorage; s.getItem(WORKING_KEY); return s; } catch { return null; }
+    }
+    function readLayouts() {
+      const s = store();
+      if (!s) return {};
+      try { const all = JSON.parse(s.getItem(LAYOUTS_KEY) || '{}'); return all && typeof all === 'object' ? all : {}; }
+      catch { return {}; }
+    }
+    function writeLayouts(all) {
+      const s = store();
+      if (!s) return false;
+      try { s.setItem(LAYOUTS_KEY, JSON.stringify(all)); return true; } catch { return false; }
+    }
+    function saveWorking() {
+      const s = store();
+      if (!s) return;
+      try { s.setItem(WORKING_KEY, JSON.stringify(G.layoutOf(config))); } catch { /* quota, private mode */ }
+    }
+    function clearWorking() {
+      const s = store();
+      if (s) try { s.removeItem(WORKING_KEY); } catch { /* ignore */ }
+    }
+    function restoreWorking() {
+      const s = store();
+      if (!s) return false;
+      try {
+        const raw = s.getItem(WORKING_KEY);
+        if (!raw) return false;
+        G.applyLayout(config, JSON.parse(raw));
+        return true;
+      } catch { clearWorking(); return false; }
+    }
+
     // ---------- panel ----------
     const $ = (id) => document.getElementById(id);
     const inputs = { width: $('in-width'), length: $('in-length'), height: $('in-height') };
     for (const [key, el] of Object.entries(inputs)) {
-      el.value = +config.room[key].toFixed(3);
       el.addEventListener('input', () => {
         const v = parseFloat(el.value);
         if (Number.isFinite(v) && v > 0) { config.room[key] = v; buildRoom(); fitGround(); }
@@ -465,6 +962,93 @@
     $('btn-reset').addEventListener('click', () => frameCamera('default'));
     $('btn-top').addEventListener('click', () => frameCamera('top'));
     $('btn-inside').addEventListener('click', insideView);
+    $('btn-reset-layout').addEventListener('click', resetLayout);
+    $('btn-rotate').addEventListener('click', rotateSelected);
+    $('btn-next-wall').addEventListener('click', nextWallSelected);
+    $('btn-deselect').addEventListener('click', () => select(null));
+
+    function sayLayout(msg, bad = false) {
+      const el = $('layout-msg');
+      el.textContent = msg;
+      el.className = bad ? 'bad' : '';
+    }
+    function refreshLayoutList(pick) {
+      const sel = $('sel-layout'), names = Object.keys(readLayouts()).sort();
+      sel.innerHTML = names.length
+        ? names.map(n => `<option${n === pick ? ' selected' : ''}>${n.replace(/[<&]/g, c => ({ '<': '&lt;', '&': '&amp;' }[c]))}</option>`).join('')
+        : '<option value="" disabled selected>nothing saved yet</option>';
+      for (const id of ['btn-load-layout', 'btn-delete-layout']) $(id).disabled = !names.length;
+    }
+    $('btn-save-layout').addEventListener('click', () => {
+      const name = $('in-layout-name').value.trim();
+      if (!name) return sayLayout('Give the layout a name first.', true);
+      if (!store()) return sayLayout('This browser will not store anything on a file:// page — run "npm run serve".', true);
+      const all = readLayouts();
+      const isNew = !(name in all);
+      all[name] = G.layoutOf(config);
+      if (!writeLayouts(all)) return sayLayout('Could not save — storage is full or blocked.', true);
+      refreshLayoutList(name);
+      sayLayout(`${isNew ? 'Saved' : 'Overwrote'} "${name}".`);
+    });
+    $('btn-load-layout').addEventListener('click', () => {
+      const name = $('sel-layout').value;
+      const saved = readLayouts()[name];
+      if (!saved) return sayLayout('Pick a saved layout first.', true);
+      try {
+        const applied = G.applyLayout(config, saved);
+        $('in-layout-name').value = name;
+        select(null);
+        buildRoom();
+        sayLayout(`Loaded "${name}" — ${applied.length} pieces.`);
+      } catch (err) { sayLayout(`Could not load "${name}": ${err.message}`, true); }
+    });
+    $('btn-delete-layout').addEventListener('click', () => {
+      const name = $('sel-layout').value, all = readLayouts();
+      if (!(name in all)) return sayLayout('Pick a saved layout first.', true);
+      delete all[name];
+      writeLayouts(all);
+      refreshLayoutList();
+      sayLayout(`Deleted "${name}".`);
+    });
+    $('btn-export').addEventListener('click', () => {
+      const name = $('in-layout-name').value.trim() || 'room-layout';
+      const blob = new Blob([JSON.stringify({ name, ...G.layoutOf(config) }, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${name.replace(/[^\w.-]+/g, '-')}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      sayLayout(`Exported ${a.download}.`);
+    });
+    $('btn-import').addEventListener('click', () => $('file-import').click());
+    $('file-import').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      e.target.value = '';                     // so the same file can be picked twice
+      if (!file) return;
+      try {
+        const layout = JSON.parse(await file.text());
+        const applied = G.applyLayout(config, layout);
+        if (layout.name) $('in-layout-name').value = String(layout.name).slice(0, 60);
+        select(null);
+        buildRoom();
+        sayLayout(`Imported ${file.name} — ${applied.length} pieces.`);
+      } catch (err) { sayLayout(`Could not read ${file.name}: ${err.message}`, true); }
+    });
+    for (const [id, axis] of [['in-a', 0], ['in-b', 1]]) {
+      $(id).addEventListener('input', () => {
+        const v = selectedView();
+        if (!v) return;
+        const n = parseFloat($(id).value);
+        if (!Number.isFinite(n)) return;
+        const f = v.item;
+        if (v.kind === 'wall') G.placeWallItem(config.room, f, axis === 0 ? n : f.from, axis === 0 ? (f.y || 0) : n);
+        else G.placeFloorItem(config.room, f, axis === 0 ? n : f.x, axis === 0 ? f.z : n);
+        moveView(f);
+        refreshIssues();
+      });
+    }
     $('chk-labels').addEventListener('change', (e) => { for (const sp of labelSprites) sp.visible = e.target.checked; });
 
     function li(ul, swatch, text, meta) {
@@ -472,6 +1056,53 @@
       el.innerHTML = `<span class="swatch" style="background:${swatch}"></span><span>${text}</span><span class="meta">${meta}</span>`;
       ul.appendChild(el);
     }
+    // The "Selected" block: which piece is picked up and where it stands.
+    function updateSelectedPanel() {
+      const v = selectedView();
+      $('sel-empty').hidden = !!v;
+      $('sel-body').hidden = !v;
+      $('btn-rotate').disabled = !v;
+      $('btn-next-wall').disabled = !v || v.kind !== 'wall';
+      if (!v) return;
+      const f = v.item, wall = v.kind === 'wall';
+      const pos = wall ? [f.from, f.y || 0] : [f.x, f.z];
+      $('sel-name').textContent = `${f.name || f.id} · ${wall ? `${f.wall} wall` : G.fmtFt(f.w) + ' × ' + G.fmtFt(f.d)}`;
+      $('lab-a').textContent = wall ? 'Along wall' : 'X';
+      $('lab-b').textContent = wall ? 'Height' : 'Z';
+      for (const [i, id] of [[0, 'in-a'], [1, 'in-b']]) {
+        const el = $(id);
+        if (document.activeElement !== el) el.value = +pos[i].toFixed(3);
+        el.title = G.fmtFt(pos[i]);
+      }
+    }
+
+    // Re-run the rules only — cheap enough to call on every pointermove.
+    function refreshIssues() {
+      const issues = G.validate(config);
+      const box = $('issues');
+      box.className = issues.length ? 'bad' : 'ok';
+      box.innerHTML = issues.length ? `<ul>${issues.map(i => `<li>${i}</li>`).join('')}</ul>` : 'All spec rules pass.';
+    }
+
+    // One furniture row: a checkbox that places or removes the piece.
+    function furnitureRow(ul, f) {
+      const kind = G.itemKind(f), on = G.isEnabled(f), id = `fx-${f.id}`;
+      const meta = kind === 'wall'
+        ? `${G.fmtFt(f.w)} × ${G.fmtFt(f.h)} · ${f.wall} @ ${G.fmtFt(f.y || 0)}`
+        : kind === 'rug' ? `${G.fmtFt(f.w)} × ${G.fmtFt(f.d)}`
+        : `${G.fmtFt(f.w)} × ${G.fmtFt(f.d)} × ${G.fmtFt(f.h)}`;
+      const el = document.createElement('li');
+      if (!on) el.className = 'off';
+      el.innerHTML = `<input type="checkbox" id="${id}"${on ? ' checked' : ''}>` +
+        `<span class="swatch" style="background:${f.color || '#888'}"></span>` +
+        `<label for="${id}">${f.name || f.id}</label><span class="meta">${meta}</span>`;
+      el.querySelector('input').addEventListener('change', (e) => {
+        f.enabled = e.target.checked;
+        buildRoom();
+      });
+      ul.appendChild(el);
+    }
+
     function updatePanel() {
       const { width: W, length: L, height: H } = config.room;
       $('room-name').textContent = config.name || 'Room';
@@ -488,7 +1119,7 @@
       const lf = $('legend-fixtures'); lf.innerHTML = '';
       for (const f of config.fixtures || []) li(lf, '#d9d4ca', f.name || f.id, `${G.fmtFt(f.w)} × ${G.fmtFt(f.d)}`);
       const lu = $('legend-furniture'); lu.innerHTML = '';
-      for (const f of config.furniture || []) li(lu, f.color || '#888', f.name || f.id, `${G.fmtFt(f.w)} × ${G.fmtFt(f.d)} × ${G.fmtFt(f.h)}`);
+      for (const f of config.furniture || []) furnitureRow(lu, f);
       const le = $('legend-exterior'); le.innerHTML = '';
       const ex = config.exterior;
       if (ex) {
@@ -497,11 +1128,13 @@
         if (ex.drain) li(le, '#24262a', ex.drain.name || 'Drain', `${G.fmtFt(ex.drain.out)} from wall`);
       }
 
-      const issues = G.validate(config);
-      const box = $('issues');
-      box.className = issues.length ? 'bad' : 'ok';
-      box.innerHTML = issues.length ? `<ul>${issues.map(i => `<li>${i}</li>`).join('')}</ul>` : 'All spec rules pass.';
+      for (const [key, el] of Object.entries(inputs)) {
+        if (document.activeElement !== el) el.value = +config.room[key].toFixed(3);
+      }
+      refreshIssues();
+      updateSelectedPanel();
       $('stats').textContent = `Floor area ${(W * L).toFixed(1)} sq ft · Volume ${(W * L * H).toFixed(0)} cu ft`;
+      saveWorking();
     }
 
     // ---------- resize / loop ----------
@@ -515,6 +1148,13 @@
     new ResizeObserver(resize).observe(view);
     window.addEventListener('resize', resize);
 
+    const restored = restoreWorking();
+    refreshLayoutList();
+    sayLayout(store()
+      ? (restored ? 'Picked up where you left off. "Reset" goes back to room.config.js.'
+                  : 'Moves are kept in this browser. Name a layout and press Save to keep more than one.')
+      : 'Nothing can be saved on a file:// page — run "npm run serve" and open http://localhost:8000.');
+
     buildRoom();
     fitGround();
     resize();
@@ -527,7 +1167,12 @@
     });
 
     // exposed for the test suite and console tinkering
-    window.__room = { THREE, scene, camera, controls, renderer, config, buildRoom, frameCamera, get roomGroup() { return roomGroup; } };
+    window.__room = {
+      THREE, scene, camera, controls, renderer, config, buildRoom, frameCamera,
+      select, resetLayout, rotateSelected, nextWallSelected,
+      get roomGroup() { return roomGroup; },
+      get selectedId() { return selectedId; },
+    };
   </script>
 </body>
 </html>

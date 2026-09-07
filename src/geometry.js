@@ -109,6 +109,101 @@
   const itemRect = (f) => ({ x: f.x, z: f.z, w: f.w, d: f.d });
 
   /*
+   * Furniture kinds. 'floor' pieces stand on the floor and take part in the
+   * overlap/clearance rules; 'wall' pieces hang off a wall at height y and
+   * only have to keep clear of openings and of whatever stands under them;
+   * 'rug' pieces lie flat, so anything may stand on them.
+   */
+  const itemKind = (f) => f.kind || 'floor';
+  const isEnabled = (f) => f.enabled !== false;
+  const activeFurniture = (config) => (config.furniture || []).filter(isEnabled);
+  const furnitureOfKind = (config, kind) => activeFurniture(config).filter(f => itemKind(f) === kind);
+
+  // Footprint of a wall-mounted piece: w along the wall, d out from it.
+  const wallItemRect = (room, f) => localRect(wallFrame(room, f.wall), f.from, 0, f.w, f.d);
+  // Vertical extent of a wall-mounted piece.
+  const wallItemSpan = (f) => ({ bottom: f.y || 0, top: (f.y || 0) + f.h });
+
+  const RUG_MAX_THICKNESS = 0.25; // ft — thicker than this and it is not a rug
+
+  /*
+   * How far a rect reaches inside a wall: the largest inward distance of its
+   * four corners, measured along that wall's inward normal. <= 0 means the
+   * whole rect is on the outside (a closet alcove, the exterior pad).
+   */
+  function inwardDepth(room, wall, rect) {
+    const f = wallFrame(room, wall);
+    const corners = [[rect.x, rect.z], [rect.x + rect.w, rect.z],
+                     [rect.x, rect.z + rect.d], [rect.x + rect.w, rect.z + rect.d]];
+    return Math.max(...corners.map(([x, z]) => (x - f.origin[0]) * f.n[0] + (z - f.origin[1]) * f.n[1]));
+  }
+
+  // ---------- moving furniture ----------
+  const NUDGE = 1 / 12;                            // ft — positions snap to the inch
+  const FACINGS = ['z+', 'x+', 'z-', 'x-'];        // 90° steps, clockwise in plan
+  const snapTo = (v, step = NUDGE) => Math.round(v / step) * step;
+
+  // Keep a footprint of w × d inside the room outline.
+  function clampToRoom(room, w, d, x, z) {
+    return {
+      x: Math.min(Math.max(x, 0), Math.max(0, room.width - w)),
+      z: Math.min(Math.max(z, 0), Math.max(0, room.length - d)),
+    };
+  }
+  // Keep a wall piece inside its wall and under the ceiling.
+  function clampToWall(room, f, from, y) {
+    const len = wallFrame(room, f.wall).length;
+    return {
+      from: Math.min(Math.max(from, 0), Math.max(0, len - f.w)),
+      y: Math.min(Math.max(y, 0), Math.max(0, room.height - f.h)),
+    };
+  }
+  /*
+   * A quarter turn about the piece's own centre. A floor piece turns in plan:
+   * w and d swap and x/z shift so the centre stays put. A wall piece turns in
+   * the plane of its wall: w and h swap (landscape <-> portrait) about the
+   * centre of the panel, and its projection out from the wall (d) is unchanged.
+   */
+  function rotatedItem(f) {
+    if (itemKind(f) === 'wall') {
+      const ca = f.from + f.w / 2, cy = (f.y || 0) + f.h / 2;
+      return { w: f.h, h: f.w, from: ca - f.h / 2, y: cy - f.w / 2 };
+    }
+    const facing = FACINGS[(FACINGS.indexOf(f.facing || 'z+') + 1) % FACINGS.length];
+    const cx = f.x + f.w / 2, cz = f.z + f.d / 2;
+    return { facing, w: f.d, d: f.w, x: cx - f.d / 2, z: cz - f.w / 2 };
+  }
+  /*
+   * Send a wall piece round to the next wall, keeping how far along it sits as
+   * a fraction so it lands in a comparable spot on a wall of another length.
+   */
+  function nextWall(room, f) {
+    const wall = WALLS[(WALLS.indexOf(f.wall) + 1) % WALLS.length];
+    const was = wallFrame(room, f.wall).length, now = wallFrame(room, wall).length;
+    const t = was > f.w ? (f.from / (was - f.w)) : 0;
+    return { wall, from: Math.max(0, now - f.w) * t };
+  }
+  // Turn a piece a quarter turn in place, keeping it inside the room / wall.
+  function rotateItem(room, f) {
+    Object.assign(f, rotatedItem(f));
+    if (itemKind(f) === 'wall') Object.assign(f, clampToWall(room, f, f.from, f.y || 0));
+    else Object.assign(f, clampToRoom(room, f.w, f.d, f.x, f.z));
+    return f;
+  }
+
+  // Move a piece to a new position, snapped and clamped. Mutates and returns it.
+  function placeFloorItem(room, f, x, z) {
+    const p = clampToRoom(room, f.w, f.d, snapTo(x), snapTo(z));
+    f.x = p.x; f.z = p.z;
+    return f;
+  }
+  function placeWallItem(room, f, from, y) {
+    const p = clampToWall(room, f, snapTo(from), snapTo(y));
+    f.from = p.from; f.y = p.y;
+    return f;
+  }
+
+  /*
    * Door swing: a quarter disc centred on the hinge with radius = leaf width,
    * swinging into the room. Its bounding square is the opening width along
    * the wall by the opening width into the room.
@@ -152,6 +247,65 @@
     return exteriorRect(room, ex, { x: drain.x - r, out: drain.out - r, w: 2 * r, d: 2 * r });
   }
 
+  /*
+   * ---------- saving and loading a layout ----------
+   * A layout is just where every piece stands, plus the room it stands in —
+   * enough to put a dragged-around room back together, and small enough to
+   * keep in localStorage or hand around as a file. It carries no names,
+   * colours or shapes: those always come from room.config.js, so a saved
+   * layout keeps working when the catalogue changes.
+   */
+  const LAYOUT_VERSION = 1;
+  const NUMERIC = ['w', 'd', 'h', 'x', 'z', 'from', 'y'];
+
+  function layoutOf(config) {
+    return {
+      version: LAYOUT_VERSION,
+      room: { width: config.room.width, length: config.room.length, height: config.room.height },
+      furniture: (config.furniture || []).map(f => {
+        const o = { id: f.id, enabled: isEnabled(f), w: f.w, d: f.d, h: f.h };
+        if (itemKind(f) === 'wall') { o.wall = f.wall; o.from = f.from; o.y = f.y || 0; }
+        else { o.x = f.x; o.z = f.z; if (f.facing) o.facing = f.facing; }
+        return o;
+      }),
+    };
+  }
+
+  /*
+   * Apply a layout to a config, in place. Anything unrecognised is skipped
+   * rather than trusted: ids that are no longer in the catalogue, values that
+   * are not finite numbers, positions outside the room. Returns the ids that
+   * were actually moved; throws only if the payload is not a layout at all.
+   */
+  function applyLayout(config, layout) {
+    if (!layout || typeof layout !== 'object' || !Array.isArray(layout.furniture))
+      throw new Error('that file is not a saved layout');
+    if (layout.version !== LAYOUT_VERSION)
+      throw new Error(`layout version ${layout.version} is not supported (this is version ${LAYOUT_VERSION})`);
+
+    const room = layout.room || {};
+    for (const k of ['width', 'length', 'height']) {
+      if (Number.isFinite(room[k]) && room[k] > 0) config.room[k] = room[k];
+    }
+    const byId = new Map((config.furniture || []).map(f => [f.id, f]));
+    const applied = [];
+    for (const saved of layout.furniture) {
+      const f = saved && byId.get(saved.id);
+      if (!f) continue;
+      if (typeof saved.enabled === 'boolean') f.enabled = saved.enabled;
+      for (const k of NUMERIC) if (Number.isFinite(saved[k])) f[k] = saved[k];
+      if (FACINGS.includes(saved.facing)) f.facing = saved.facing;
+      if (itemKind(f) === 'wall') {
+        if (WALLS.includes(saved.wall)) f.wall = saved.wall;
+        placeWallItem(config.room, f, f.from, f.y || 0);
+      } else {
+        placeFloorItem(config.room, f, f.x, f.z);
+      }
+      applied.push(f.id);
+    }
+    return applied;
+  }
+
   // ---------- spec validation ----------
   function validate(config) {
     const issues = [];
@@ -189,9 +343,19 @@
         say('R-03', `${name(a, i)} and ${name(b, j)} overlap on the ${a.wall} wall`);
     }
 
+    // Only switched-on furniture is modelled; sort it by kind.
+    const active = furniture.map((f, i) => ({ f, label: name(f, i) })).filter(e => isEnabled(e.f));
+    const floorItems = active.filter(e => itemKind(e.f) === 'floor');
+    const wallItems  = active.filter(e => itemKind(e.f) === 'wall');
+    const rugs       = active.filter(e => itemKind(e.f) === 'rug');
+    for (const e of active) {
+      const k = itemKind(e.f);
+      if (!['floor', 'wall', 'rug'].includes(k)) say('R-07', `${e.label}: unknown furniture kind "${k}"`);
+    }
+
     const solids = [
       ...fixtures.map((f, i) => ({ kind: 'fixture', label: name(f, i), rect: itemRect(f), h: f.h })),
-      ...furniture.map((f, i) => ({ kind: 'furniture', label: name(f, i), rect: itemRect(f), h: f.h })),
+      ...floorItems.map(e => ({ kind: 'furniture', label: e.label, rect: itemRect(e.f), h: e.f.h })),
     ];
     for (const s of solids) {
       if (!(s.rect.w > 0 && s.rect.d > 0 && s.h > 0)) say('R-07', `${s.label}: w, d and h must be positive`);
@@ -200,6 +364,44 @@
     for (let i = 0; i < solids.length; i++) for (let j = i + 1; j < solids.length; j++) {
       if (rectsOverlap(solids[i].rect, solids[j].rect))
         say('R-08', `${solids[i].label} overlaps ${solids[j].label}`);
+    }
+
+    // R-12 wall-mounted pieces: on a real wall, inside it, under the ceiling,
+    // clear of the openings, of anything standing under them, and of each other.
+    const mounted = [];
+    for (const { f, label } of wallItems) {
+      if (!WALLS.includes(f.wall)) { say('R-12', `${label}: unknown wall "${f.wall}"`); continue; }
+      if (!(f.w > 0 && f.d > 0 && f.h > 0)) { say('R-12', `${label}: w, d and h must be positive`); continue; }
+      const len = wallFrame(room, f.wall).length;
+      const span = wallItemSpan(f);
+      if (f.from < -EPS || f.from + f.w > len + EPS)
+        say('R-12', `${label} runs past the end of the ${f.wall} wall (${fmtFt(len)})`);
+      if (span.bottom < -EPS) say('R-12', `${label} is mounted below the floor`);
+      if (span.top > H + EPS) say('R-12', `${label} reaches ${fmtFt(span.top)}, above the ceiling (${fmtFt(H)})`);
+      openings.forEach((o, i) => {
+        if (o.wall !== f.wall || !WALLS.includes(o.wall)) return;
+        if (!spansOverlap(f.from, f.from + f.w, o.from, o.from + o.width)) return;
+        const os = openingSpan(o);
+        if (spansOverlap(span.bottom, span.top, os.bottom, os.top)) say('R-12', `${label} covers ${name(o, i)}`);
+      });
+      const rect = wallItemRect(room, f);
+      for (const s of solids) {
+        if (rectsOverlap(rect, s.rect) && spansOverlap(span.bottom, span.top, 0, s.h))
+          say('R-12', `${label} runs into ${s.label}`);
+      }
+      for (const m of mounted) {
+        if (rectsOverlap(rect, m.rect) && spansOverlap(span.bottom, span.top, m.span.bottom, m.span.top))
+          say('R-12', `${label} runs into ${m.label}`);
+      }
+      mounted.push({ label, rect, span });
+    }
+
+    // R-13 rugs lie flat inside the room; anything may stand on them.
+    for (const { f, label } of rugs) {
+      if (!(f.w > 0 && f.d > 0 && f.h > 0)) { say('R-13', `${label}: w, d and h must be positive`); continue; }
+      if (!rectInside(itemRect(f), rr)) say('R-13', `${label} extends outside the room`);
+      if (f.h > RUG_MAX_THICKNESS + EPS)
+        say('R-13', `${label} is ${fmtFt(f.h)} thick; a rug must lie flat (${fmtFt(RUG_MAX_THICKNESS)} or less)`);
     }
 
     openings.forEach((o, i) => {
@@ -253,6 +455,10 @@
     rectsOverlap, rectInside, rectIntersection, circleRectOverlap, spansOverlap,
     roomRect, itemRect, doorSwing, doorSwingHits, closetAlcove, closetClearance,
     windowZone, exteriorRect, drainRect, validate,
-    CLOSET_CLEARANCE, WINDOW_ZONE, AC_WALL_CLEARANCE,
+    itemKind, isEnabled, activeFurniture, furnitureOfKind, wallItemRect, wallItemSpan,
+    inwardDepth, snapTo, clampToRoom, clampToWall, rotatedItem, rotateItem, nextWall,
+    placeFloorItem, placeWallItem, layoutOf, applyLayout,
+    CLOSET_CLEARANCE, WINDOW_ZONE, AC_WALL_CLEARANCE, RUG_MAX_THICKNESS, NUDGE, FACINGS,
+    LAYOUT_VERSION,
   };
 });

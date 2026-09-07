@@ -4,7 +4,7 @@
   "private": true,
   "description": "Interactive 3-D layout of Bedroom 6 with a spec-driven test suite",
   "scripts": {
-    "test": "node --test \"test/*.test.js\"",
+    "test": "node --test test/",
     "test:spec": "node --test test/spec.test.js",
     "test:render": "node --test test/render.test.js",
     "serve": "python3 -m http.server 8000"
